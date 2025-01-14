@@ -1,0 +1,24 @@
+SigninLogs
+| where ResultType == 0
+
+| summarize Day = bin(min(TimeGenerated), 1d) 
+           by UserPrincipalName, CorrelationId
+| summarize SignInCount = count() 
+           by UserPrincipalName, Day
+| extend SignInGroup = case(
+    SignInCount == 1, "1 time",
+    SignInCount == 2, "2 times",
+    SignInCount == 3, "3 times",
+    SignInCount == 4, "4 times",
+    SignInCount >= 5, "5 or more times",
+    "Unknown"
+)
+// Count how many distinct users ended up in each bucket per day:
+| summarize UsersCount = dcount(UserPrincipalName) 
+           by Day, SignInGroup, UserPrincipalName
+| order by Day desc
+| render timechart 
+
+// All the successful sign-ins for each day and makes sure that each unique sign-in is only counted once per user. 
+// It then calculates how many times each user signed in on a particular day, places them in a category 
+// (1 time, 2 times, etc.), and shows how many users fell into each category for each day. 
