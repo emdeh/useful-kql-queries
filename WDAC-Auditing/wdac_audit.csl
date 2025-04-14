@@ -1,0 +1,64 @@
+/*
+    This query identifies the most recent interactive logon per device and account,
+    retrieves the latest known UPN for each AccountSid, and then joins this information
+    with DeviceEvents to provide context on WDAC policy enforcement actions.
+    
+    The query filters out certain system accounts and focuses on specific action types
+    related to WDAC policy enforcement.
+
+    When running in MDE Advanced Threat Hunting, make sure to run it all in one query
+    (e.g., highlight all and run) to ensure the joins work correctly.)
+
+    Note: The query assumes that the DeviceLogonEvents and IdentityLogonEvents tables
+    are available in your environment. Adjust the table names if necessary.
+
+    Ensure to replace "XXX" in the DeviceName filter with the actual prefix 
+    you want to search for or remove that filter to search all devices.
+*/
+
+// Step 1: Get the latest interactive logon per device and account
+let LatestLogons = 
+    DeviceLogonEvents
+    | where LogonType == "Interactive"
+    | where AccountName !in ("DWM-1", "UMFD-0", "SYSTEM", "LOCAL SERVICE", "NETWORK SERVICE")
+    | summarize LastLogonTime = max(Timestamp) by DeviceName, AccountSid;
+
+// Step 2: Get the latest known UPN per AccountSid
+let LatestUPNs =
+    IdentityLogonEvents
+    | summarize arg_max(Timestamp, AccountUpn) by AccountSid
+    | project AccountSid, AccountUpn;
+
+// Step 3: Combine to get a single UPN per device by selecting the most recent logon per DeviceName
+let LogonsWithUPN =
+    LatestLogons
+    | join kind=inner (LatestUPNs) on AccountSid
+    | summarize arg_max(LastLogonTime, AccountUpn) by DeviceName;
+
+// Step 4: Query DeviceEvents and join with the likely user UPN information
+DeviceEvents
+| where ActionType in ("AppControlCodeIntegrityPolicyAudited", "AppControlCodeIntegrityPolicyBlocked")
+| where DeviceName startswith "XXX"
+| extend AdditionalFields = todynamic(AdditionalFields)
+| join kind=leftouter (LogonsWithUPN) on DeviceName
+| project 
+    Timestamp,
+    DeviceName,
+    LikelyUserUPN = AccountUpn,
+    LastLogonTime,
+    ActionType,
+    FileName,
+    FolderPath,
+    InitiatingProcessFileName,
+    PolicyEnforcement = case(
+        ActionType == "AppControlCodeIntegrityPolicyBlocked", "Blocked",
+        ActionType == "AppControlCodeIntegrityPolicyAudited", "Audited",
+        "Other"
+    ),
+    InitiatingProcessAccountDomain,
+    InitiatingProcessAccountUpn,
+    InitiatingProcessCommandLine,
+    PolicyId = tostring(AdditionalFields["PolicyId"]),
+    PolicyName = tostring(AdditionalFields["PolicyName"]),
+    PolicyVersion = tostring(AdditionalFields["PolicyVersion"])
+| order by Timestamp desc
