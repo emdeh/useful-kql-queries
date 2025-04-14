@@ -1,20 +1,20 @@
-/*
-    This query identifies the most recent interactive logon per device and account,
-    retrieves the latest known UPN for each AccountSid, and then joins this information
-    with DeviceEvents to provide context on WDAC policy enforcement actions.
-    
-    The query filters out certain system accounts and focuses on specific action types
-    related to WDAC policy enforcement.
-
-    When running in MDE Advanced Threat Hunting, make sure to run it all in one query
-    (e.g., highlight all and run) to ensure the joins work correctly.)
-
-    Note: The query assumes that the DeviceLogonEvents and IdentityLogonEvents tables
-    are available in your environment. Adjust the table names if necessary.
-
-    Ensure to replace "XXX" in the DeviceName filter with the actual prefix 
-    you want to search for or remove that filter to search all devices.
-*/
+//
+//    This query identifies the most recent interactive logon per device and account,
+//    retrieves the latest known UPN for each AccountSid, and then joins this information
+//    with DeviceEvents to provide context on WDAC policy enforcement actions.
+//    
+//    The query filters out certain system accounts and focuses on specific action types
+//    related to WDAC policy enforcement.
+//
+//    When running in MDE Advanced Threat Hunting, make sure to run it all in one query
+//    (e.g., highlight all and run) to ensure the joins work correctly.)
+//
+//    Note: The query assumes that the DeviceLogonEvents and IdentityLogonEvents tables
+//    are available in your environment. Adjust the table names if necessary.
+//
+//    Ensure to replace "XXX" in the DeviceName filter with the actual prefix 
+//    you want to search for or remove that filter to search all devices.
+//
 
 // Step 1: Get the latest interactive logon per device and account
 let LatestLogons = 
