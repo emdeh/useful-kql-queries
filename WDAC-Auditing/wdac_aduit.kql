@@ -1,0 +1,41 @@
+//
+//    This query is used to identify and analyse WDAC (Windows Defender Application Control)
+//    policy enforcement events across devices.
+//
+//    It filters the DeviceEvents table for relevant WDAC action types—specifically those 
+//    indicating either audit or block events—and extracts key contextual information 
+//    such as the file name, command line, and policy metadata.
+//
+//    This version does not correlate logons or user identity data. Instead, it provides
+//    a device-centric view of WDAC enforcement activity, which may be useful for 
+//    initial triage, baselining policy behaviour, or validating deployments.
+//
+//    Note: Ensure that "DeviceName startswith" is updated with an appropriate device
+//    naming prefix or removed entirely to analyse all devices.
+//
+
+
+DeviceEvents
+| where ActionType in ("AppControlCodeIntegrityPolicyAudited", "AppControlCodeIntegrityPolicyBlocked")
+| where DeviceName startswith "XXX" // Replace with your device prefix or remove this filter
+| extend 
+    AdditionalFields = todynamic(AdditionalFields)
+| project 
+    Timestamp,
+    DeviceName,
+    ActionType,
+    FileName,
+    FolderPath,
+    InitiatingProcessFileName,
+    PolicyEnforcement = case(
+        ActionType == "AppControlCodeIntegrityPolicyBlocked", "Blocked",
+        ActionType == "AppControlCodeIntegrityPolicyAudited", "Audited",
+        "Other"
+    ),
+    InitiatingProcessAccountDomain,
+    InitiatingProcessAccountUpn,
+    InitiatingProcessCommandLine,
+    PolicyId = tostring(AdditionalFields["PolicyId"]),
+    PolicyName = tostring(AdditionalFields["PolicyName"]),
+    PolicyVersion = tostring(AdditionalFields["PolicyVersion"])
+| order by Timestamp desc

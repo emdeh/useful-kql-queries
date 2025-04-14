@@ -38,7 +38,7 @@ let LogonsWithUPN =
 // Step 4: Query DeviceEvents and join with the likely user UPN information
 DeviceEvents
 | where ActionType in ("AppControlCodeIntegrityPolicyAudited", "AppControlCodeIntegrityPolicyBlocked")
-| where DeviceName startswith "XXX"
+| where DeviceName startswith "XXX" // Replace with your device prefix or remove this filter
 | extend AdditionalFields = todynamic(AdditionalFields)
 | join kind=leftouter (LogonsWithUPN) on DeviceName
 | project 
