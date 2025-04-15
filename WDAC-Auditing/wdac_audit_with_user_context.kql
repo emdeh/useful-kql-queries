@@ -38,7 +38,7 @@ let LogonsWithUPN =
 // Step 4: Query DeviceEvents and join with the likely user UPN information
 DeviceEvents
 | where ActionType in ("AppControlCodeIntegrityPolicyAudited", "AppControlCodeIntegrityPolicyBlocked")
-| where DeviceName startswith "XXX" // Replace with your device prefix or remove this filter
+| where DeviceName startswith "XXX"
 | extend AdditionalFields = todynamic(AdditionalFields)
 | join kind=leftouter (LogonsWithUPN) on DeviceName
 | project 
@@ -58,7 +58,8 @@ DeviceEvents
     InitiatingProcessAccountDomain,
     InitiatingProcessAccountUpn,
     InitiatingProcessCommandLine,
-    PolicyId = tostring(AdditionalFields["PolicyId"]),
+    PolicyID = tostring(AdditionalFields["PolicyID"]),
     PolicyName = tostring(AdditionalFields["PolicyName"]),
-    PolicyVersion = tostring(AdditionalFields["PolicyVersion"])
+    //PolicyVersion = tostring(AdditionalFields["PolicyVersion"]),
+    PolicyGuid = tostring(AdditionalFields["PolicyGuid"])
 | order by Timestamp desc
