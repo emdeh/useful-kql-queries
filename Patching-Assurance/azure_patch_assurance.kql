@@ -1,0 +1,39 @@
+//
+//    This query retrieves available (i.e., not yet installed) software patches reported by Azure Update Manager
+//    via the `patchassessmentresources` table for virtual machines in Azure.
+//
+//    It extracts the VM name, patch metadata (including KB ID, classification, and severity),
+//    and calculates how many days have passed since each patch was published.
+//
+//    The query then evaluates each patch against the Essential Eight time-based compliance criteria:
+//      - Critical patches must be applied within 2 days.
+//      - Non-critical patches must be applied within 14 days.
+//
+//    Based on this, a "complianceStatus" column is generated to indicate whether each patch
+//    is "Within Tolerance" or "Outside Tolerance".
+//
+//    This helps identify which VMs may be non-compliant with PSPF and Essential Eight patching timelines.
+//
+//    Notes:
+//      - This only reflects available patches; already installed patches do not appear in this dataset.
+//      - The data requires that Azure Update Manager periodic assessments are enabled on the VMs.
+//      - Adjust the project or filter statements as needed to tailor results for specific environments or reporting needs.
+//
+
+patchassessmentresources
+| where type contains "microsoft.compute/virtualmachines/patchassessmentresults/softwarepatches"
+| extend vmName = split(id, "/")[8] // This may differ depending on how `id` is constructed in other enviornments.
+| extend patchName = tostring(properties.patchName)
+| extend kbId = tostring(properties.kbId)
+| extend classification = tostring(properties.classifications[0])
+| extend publishedDateTime = todatetime(properties.publishedDateTime)
+| extend daysSincePublished = datetime_diff('day', now(), publishedDateTime)
+| extend Severity = tostring(properties.msrcSeverity)
+| extend complianceStatus = case(
+    Severity =~ "Critical" and daysSincePublished <= 2, "Within Tolerance",
+    Severity =~ "Critical" and daysSincePublished > 2,  "Outside Tolerance",
+    daysSincePublished <= 14, "Within Tolerance",
+    "Outside Tolerance"
+)
+| project vmName, resourceGroup, patchName, kbId, Severity, classification, publishedDateTime, daysSincePublished, complianceStatus
+| order by complianceStatus desc, daysSincePublished desc
