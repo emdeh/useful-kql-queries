@@ -1,0 +1,62 @@
+//  -------------------------------------------------------------------------------------------
+//  Query:  Standing Privileged Role Assignments — *Flat User-Role List*
+//  
+//  Purpose
+//  -------
+//  Return **one row per user-role pair** where the role is *Assigned* (standing PIM access)
+//  and the identity has been observed in the last 14 days.  
+//  Useful for immediate review / export of who holds live privileged access.
+//  
+//  Workflow
+//  --------
+//  1.  **Time filter** – keep only `IdentityInfo` records newer than 14 days  
+//      (`Timestamp > ago(14d)`).
+//  2.  **Latest snapshot per identity** – `arg_max()` retains the most-recent row for each
+//      `AccountObjectId` (dedupes repeat entries).
+//  3.  **Parse & expand PIM roles**  
+//      • Convert `PrivilegedEntraPimRoles` JSON to dynamic (`Pim`).  
+//      • `bag_keys()` lists role names; `mv-expand` turns them into individual rows.  
+//  4.  **Standing access filter** – keep rows whose `Flags` array contains `"Assigned"`.  
+//      • Swap to `"Eligible"` if you want eligible roles instead.  
+//  5.  *(Optional)* Restrict to specific roles by uncommenting  
+//      `let TargetRoles = …` and the `where Role in~ (TargetRoles)` line.  
+//  6.  **Project** a flat view:  
+//      `User`, `Role`, object IDs, SID(s), assignment flags, and last-seen `Timestamp`.  
+//  7.  **Order** alphabetically by `User`, then `Role` for easy scanning.
+//  
+//  Output Columns
+//  --------------
+//  | User (string) | Role (string) | AccountObjectId (guid) | CloudSid (string) |
+//  | OnPremSid (string) | AssignmentFlags (dynamic) | Timestamp (datetime) |
+//  
+//  Usage Tips
+//  ----------
+//  * Remove or widen the 14-day window if you need a full historical picture.
+//  * The `AssignmentFlags` array preserves extra context (e.g. `"NoExpiration"`).
+//  * Run in Microsoft 365 Defender Advanced Hunting or any workspace ingesting
+//    the **IdentityInfo** table.
+//  -------------------------------------------------------------------------------------------
+
+
+// let TargetRoles = dynamic(["Global Administrator", "Security Administrator"]);
+
+IdentityInfo
+| where Timestamp > ago(14d)
+| summarize arg_max(Timestamp, *) by AccountObjectId, OnPremSid, CloudSid
+| extend Pim = todynamic(PrivilegedEntraPimRoles)
+| where isnotempty(Pim)
+| extend Role = bag_keys(Pim)
+| mv-expand Role to typeof(string)
+| extend Flags = Pim[Role]                         // e.g. ["Assigned","NoExpiration","Direct"]
+| where array_index_of(Flags, "Assigned") >= 0     // keep only standing assignments. Replace "Assigned" with "Eligible" if you also want to review eligible assignments
+//| where Role in~ (TargetRoles) //Uncomment this and the paramertisation of the roles if you want to search for specific roles only. Else it returns all.
+| project User = AccountName,
+          Role,
+          AccountObjectId, CloudSid, OnPremSid,
+          AssignmentFlags = Flags,
+          Timestamp
+| order by User asc, Role asc
+
+
+
+
